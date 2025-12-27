@@ -9,6 +9,7 @@ import { Download, RefreshCw, Loader2 } from 'lucide-vue-next'
 const store = useEditorStore()
 const canvasEngine = new CanvasEngine()
 const processedUrl = ref<string | null>(null)
+const version = __APP_VERSION__
 
 async function handleProcess() {
   if (!store.currentFile || !store.activeMode) return
@@ -59,7 +60,7 @@ function reset() {
             MirrorRealm
           </h1>
         </div>
-        <div class="text-sm text-gray-400">v0.1.0</div>
+        <div class="text-sm text-gray-400">v{{ version }}</div>
       </div>
     </header>
 
