@@ -46,7 +46,9 @@ function reset() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-950 text-gray-100 font-sans selection:bg-blue-500/30">
+  <div
+    class="min-h-screen flex flex-col bg-gray-950 text-gray-100 font-sans selection:bg-blue-500/30"
+  >
     <header class="border-b border-gray-800 bg-gray-900/50 backdrop-blur-md sticky top-0 z-50">
       <div class="container mx-auto px-4 h-16 flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -61,7 +63,7 @@ function reset() {
       </div>
     </header>
 
-    <main class="container mx-auto px-4 py-8">
+    <main class="container mx-auto px-4 py-8 flex-1 flex flex-col">
       <!-- Upload State -->
       <div v-if="!store.currentFile" class="max-w-2xl mx-auto mt-20">
         <div class="text-center mb-12">
@@ -75,7 +77,7 @@ function reset() {
       </div>
 
       <!-- Editor State -->
-      <div v-else class="grid lg:grid-cols-3 gap-8 h-[calc(100vh-12rem)]">
+      <div v-else class="flex-1 grid lg:grid-cols-3 gap-8">
         <!-- Left: Editor -->
         <div class="lg:col-span-2 flex flex-col gap-4">
           <div class="flex items-center justify-between">
@@ -86,7 +88,7 @@ function reset() {
             <div class="flex gap-2">
               <button
                 @click="reset"
-                class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors flex items-center gap-2"
+                class="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-md transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <RefreshCw class="w-4 h-4" />
                 Reset
