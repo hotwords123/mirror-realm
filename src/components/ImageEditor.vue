@@ -261,19 +261,6 @@ const ghosts = computed<GhostLayer[]>(() => {
         <img :src="store.fileUrl || ''" :style="ghost.image" alt="" />
       </div>
 
-      <!-- Grid Overlay (Visual Guide) -->
-      <div class="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none opacity-20">
-        <div class="border-r border-b border-white/30"></div>
-        <div class="border-r border-b border-white/30"></div>
-        <div class="border-b border-white/30"></div>
-        <div class="border-r border-b border-white/30"></div>
-        <div class="border-r border-b border-white/30"></div>
-        <div class="border-b border-white/30"></div>
-        <div class="border-r border-white/30"></div>
-        <div class="border-r border-white/30"></div>
-        <div></div>
-      </div>
-
       <!-- Active Source Highlight -->
       <div :style="overlayStyle">
         <div class="absolute inset-0 flex items-center justify-center">
