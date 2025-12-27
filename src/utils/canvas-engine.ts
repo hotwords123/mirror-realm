@@ -82,12 +82,6 @@ export class CanvasEngine {
     frameCanvas.height = height
     const frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true })!
 
-    // Composition canvas for handling transparency
-    const compCanvas = document.createElement('canvas')
-    compCanvas.width = width
-    compCanvas.height = height
-    const compCtx = compCanvas.getContext('2d', { willReadFrequently: true })!
-
     const frameData = new Uint8ClampedArray(width * height * 4)
     let backupFrameData: Uint8ClampedArray | null = null
 
@@ -128,19 +122,16 @@ export class CanvasEngine {
 
       // 4. Handle Transparency for Output
       if (transparentColor !== null) {
-        // Fill with Chroma Key
+        // Fill with Chroma Key using destination-over to paint BEHIND the image
         const hex = transparentColor.toString(16).padStart(6, '0')
-        compCtx.fillStyle = `#${hex}`
-        compCtx.fillRect(0, 0, width, height)
-      } else {
-        compCtx.clearRect(0, 0, width, height)
+        frameCtx.globalCompositeOperation = 'destination-over'
+        frameCtx.fillStyle = `#${hex}`
+        frameCtx.fillRect(0, 0, width, height)
+        frameCtx.globalCompositeOperation = 'source-over' // Restore default
       }
 
-      // Draw the symmetrical frame
-      compCtx.drawImage(frameCanvas, 0, 0)
-
       const delay = info.delay * 10
-      gif.addFrame(compCtx, { delay, copy: true })
+      gif.addFrame(frameCtx, { delay, copy: true })
 
       onProgress?.((i / reader.numFrames()) * 0.5)
     }
