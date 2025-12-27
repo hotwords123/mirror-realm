@@ -73,7 +73,7 @@ export class CanvasEngine {
     // Detect transparency strategy from first frame
     const firstFrameData = new Uint8ClampedArray(width * height * 4)
     reader.decodeAndBlitFrameRGBA(0, firstFrameData)
-    const transparentColor = this.detectTransparencyStrategy(firstFrameData)
+    const transparentColor = this.detectTransparencyStrategy(firstFrameData, width, height, mode)
 
     const gif = new GIF({
       workers: 2,
@@ -156,12 +156,29 @@ export class CanvasEngine {
     })
   }
 
-  private detectTransparencyStrategy(data: Uint8ClampedArray): number | null {
+  private detectTransparencyStrategy(
+    data: Uint8ClampedArray,
+    width: number,
+    height: number,
+    mode: SymmetryMode,
+  ): number | null {
+    const config = SYMMETRY_CONFIG[mode]
+    const [sx, sy, sw, sh] = normalizeRect(
+      config.source.x * width,
+      config.source.y * height,
+      config.source.w * width,
+      config.source.h * height,
+    )
+
     let hasTransparentPixels = false
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3] < 128) {
-        hasTransparentPixels = true
-        break
+    // Check source area for transparency
+    outer: for (let y = sy; y < sy + sh; y++) {
+      for (let x = sx; x < sx + sw; x++) {
+        const i = (y * width + x) * 4
+        if (data[i + 3] < 128) {
+          hasTransparentPixels = true
+          break outer
+        }
       }
     }
 
@@ -173,17 +190,20 @@ export class CanvasEngine {
       { r: 0, g: 0, b: 255, minDist: Infinity }, // Blue
     ]
 
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3] < 128) continue // Skip transparent pixels
+    for (let y = sy; y < sy + sh; y++) {
+      for (let x = sx; x < sx + sw; x++) {
+        const i = (y * width + x) * 4
+        if (data[i + 3] < 128) continue // Skip transparent pixels
 
-      const r = data[i]
-      const g = data[i + 1]
-      const b = data[i + 2]
+        const r = data[i]
+        const g = data[i + 1]
+        const b = data[i + 2]
 
-      for (const c of candidates) {
-        const dist = (r - c.r) ** 2 + (g - c.g) ** 2 + (b - c.b) ** 2
-        if (dist < c.minDist) {
-          c.minDist = dist
+        for (const c of candidates) {
+          const dist = (r - c.r) ** 2 + (g - c.g) ** 2 + (b - c.b) ** 2
+          if (dist < c.minDist) {
+            c.minDist = dist
+          }
         }
       }
     }
