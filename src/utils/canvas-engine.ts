@@ -63,13 +63,18 @@ export class CanvasEngine {
     const width = reader.width
     const height = reader.height
 
+    // Detect transparency strategy from first frame
+    const firstFrameData = new Uint8ClampedArray(width * height * 4)
+    reader.decodeAndBlitFrameRGBA(0, firstFrameData)
+    const transparentColor = this.detectTransparencyStrategy(firstFrameData)
+
     const gif = new GIF({
       workers: 2,
       quality: 10,
       width,
       height,
       workerScript: workerScriptUrl,
-      transparent: 0xff00ff, // Magenta as chroma key
+      transparent: transparentColor,
     })
 
     const frameCanvas = document.createElement('canvas')
@@ -122,9 +127,15 @@ export class CanvasEngine {
       this.applySymmetry(frameCanvas, mode)
 
       // 4. Handle Transparency for Output
-      // Fill with Chroma Key
-      compCtx.fillStyle = '#FF00FF'
-      compCtx.fillRect(0, 0, width, height)
+      if (transparentColor !== null) {
+        // Fill with Chroma Key
+        const hex = transparentColor.toString(16).padStart(6, '0')
+        compCtx.fillStyle = `#${hex}`
+        compCtx.fillRect(0, 0, width, height)
+      } else {
+        compCtx.clearRect(0, 0, width, height)
+      }
+
       // Draw the symmetrical frame
       compCtx.drawImage(frameCanvas, 0, 0)
 
@@ -145,6 +156,45 @@ export class CanvasEngine {
 
       gif.render()
     })
+  }
+
+  private detectTransparencyStrategy(data: Uint8ClampedArray): number | null {
+    let hasTransparentPixels = false
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) {
+        hasTransparentPixels = true
+        break
+      }
+    }
+
+    if (!hasTransparentPixels) return null
+
+    const candidates = [
+      { r: 255, g: 0, b: 255, minDist: Infinity }, // Magenta
+      { r: 0, g: 255, b: 0, minDist: Infinity }, // Green
+      { r: 0, g: 0, b: 255, minDist: Infinity }, // Blue
+    ]
+
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue // Skip transparent pixels
+
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+
+      for (const c of candidates) {
+        const dist = (r - c.r) ** 2 + (g - c.g) ** 2 + (b - c.b) ** 2
+        if (dist < c.minDist) {
+          c.minDist = dist
+        }
+      }
+    }
+
+    // Find candidate with maximum minimum distance (safest color)
+    candidates.sort((a, b) => b.minDist - a.minDist)
+
+    const safest = candidates[0]
+    return (safest.r << 16) | (safest.g << 8) | safest.b
   }
 
   private clearFrameDataRect(
