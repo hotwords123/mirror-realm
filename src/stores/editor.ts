@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { SymmetryMode } from '@/types'
+import type { SymmetryMode } from '@/utils/symmetry'
 
 export const useEditorStore = defineStore('editor', () => {
   const currentFile = ref<File | null>(null)

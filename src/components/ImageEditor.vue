@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useEditorStore } from '@/stores/editor'
-import type { SymmetryMode } from '@/types'
+import type { SymmetryMode } from '@/utils/symmetry'
+import { SYMMETRY_CONFIG } from '@/utils/symmetry'
+import type { CSSProperties } from 'vue'
 
 const store = useEditorStore()
 const containerRef = ref<HTMLDivElement | null>(null)
@@ -31,29 +33,16 @@ function handleMouseMove(e: MouseEvent) {
   const nx = x / w
   const ny = y / h
 
-  // Define centers for all 8 modes (normalized coordinates 0-1)
-  // We calculate distance to the center of the "Source Area" for each mode
-  const targets: { mode: SymmetryMode; x: number; y: number }[] = [
-    { mode: 'left-to-right', x: 0.25, y: 0.5 }, // Left Half Center
-    { mode: 'right-to-left', x: 0.75, y: 0.5 }, // Right Half Center
-    { mode: 'top-to-bottom', x: 0.5, y: 0.25 }, // Top Half Center
-    { mode: 'bottom-to-top', x: 0.5, y: 0.75 }, // Bottom Half Center
-    { mode: 'tl-to-all', x: 0.25, y: 0.25 }, // TL Quadrant Center
-    { mode: 'tr-to-all', x: 0.75, y: 0.25 }, // TR Quadrant Center
-    { mode: 'bl-to-all', x: 0.25, y: 0.75 }, // BL Quadrant Center
-    { mode: 'br-to-all', x: 0.75, y: 0.75 }, // BR Quadrant Center
-  ]
-
   let minDist = Infinity
   let bestMode: SymmetryMode | null = null
 
-  for (const t of targets) {
-    const dx = t.x - nx
-    const dy = t.y - ny
+  for (const [mode, config] of Object.entries(SYMMETRY_CONFIG)) {
+    const dx = config.center.x - nx
+    const dy = config.center.y - ny
     const dist = dx * dx + dy * dy // Squared distance
     if (dist < minDist) {
       minDist = dist
-      bestMode = t.mode
+      bestMode = mode as SymmetryMode
     }
   }
 
@@ -67,38 +56,22 @@ function handleClick() {
 }
 
 // Visual feedback styles
-const overlayStyle = computed(() => {
+const overlayStyle = computed<CSSProperties>(() => {
   if (!effectiveMode.value) return {}
 
   const isPreview = previewMode.value !== null && previewMode.value !== store.activeMode
+  const config = SYMMETRY_CONFIG[effectiveMode.value]
 
-  const style: Record<string, string> = {
+  return {
     position: 'absolute',
     backgroundColor: isPreview ? 'rgba(168, 85, 247, 0.4)' : 'rgba(59, 130, 246, 0.3)', // Purple for preview, Blue for active
     pointerEvents: 'none',
     transition: 'all 0.2s ease',
     border: isPreview ? '2px solid rgba(168, 85, 247, 0.8)' : 'none',
-  }
-
-  switch (effectiveMode.value) {
-    case 'left-to-right':
-      return { ...style, left: '0', top: '0', width: '50%', height: '100%' }
-    case 'right-to-left':
-      return { ...style, left: '50%', top: '0', width: '50%', height: '100%' }
-    case 'top-to-bottom':
-      return { ...style, left: '0', top: '0', width: '100%', height: '50%' }
-    case 'bottom-to-top':
-      return { ...style, left: '0', top: '50%', width: '100%', height: '50%' }
-    case 'tl-to-all':
-      return { ...style, left: '0', top: '0', width: '50%', height: '50%' }
-    case 'tr-to-all':
-      return { ...style, left: '50%', top: '0', width: '50%', height: '50%' }
-    case 'bl-to-all':
-      return { ...style, left: '0', top: '50%', width: '50%', height: '50%' }
-    case 'br-to-all':
-      return { ...style, left: '50%', top: '50%', width: '50%', height: '50%' }
-    default:
-      throw new Error('Invalid symmetry mode for overlay')
+    left: `${config.source.x * 100}%`,
+    top: `${config.source.y * 100}%`,
+    width: `${config.source.w * 100}%`,
+    height: `${config.source.h * 100}%`,
   }
 })
 
@@ -106,33 +79,16 @@ const overlayStyle = computed(() => {
 const mainImageStyle = computed(() => {
   if (!effectiveMode.value) return {}
 
-  let clipPath = ''
-  switch (effectiveMode.value) {
-    case 'left-to-right':
-      clipPath = 'polygon(0 0, 50% 0, 50% 100%, 0 100%)'
-      break
-    case 'right-to-left':
-      clipPath = 'polygon(50% 0, 100% 0, 100% 100%, 50% 100%)'
-      break
-    case 'top-to-bottom':
-      clipPath = 'polygon(0 0, 100% 0, 100% 50%, 0 50%)'
-      break
-    case 'bottom-to-top':
-      clipPath = 'polygon(0 50%, 100% 50%, 100% 100%, 0 100%)'
-      break
-    case 'tl-to-all':
-      clipPath = 'polygon(0 0, 50% 0, 50% 50%, 0 50%)'
-      break
-    case 'tr-to-all':
-      clipPath = 'polygon(50% 0, 100% 0, 100% 50%, 50% 50%)'
-      break
-    case 'bl-to-all':
-      clipPath = 'polygon(0 50%, 50% 50%, 50% 100%, 0 100%)'
-      break
-    case 'br-to-all':
-      clipPath = 'polygon(50% 50%, 100% 50%, 100% 100%, 50% 100%)'
-      break
-  }
+  const config = SYMMETRY_CONFIG[effectiveMode.value]
+  const { x, y, w, h } = config.source
+
+  // Convert normalized coordinates to percentages for polygon
+  const x1 = x * 100
+  const y1 = y * 100
+  const x2 = (x + w) * 100
+  const y2 = (y + h) * 100
+
+  const clipPath = `polygon(${x1}% ${y1}%, ${x2}% ${y1}%, ${x2}% ${y2}%, ${x1}% ${y2}%)`
 
   return {
     clipPath,
@@ -148,23 +104,18 @@ interface GhostLayer {
 const ghosts = computed<GhostLayer[]>(() => {
   if (!effectiveMode.value) return []
 
-  // Ghost Preview Implementation Strategy:
-  // 1. Create a container `div` representing the "Target Area" (where the reflection appears).
-  // 2. Use `overflow: hidden` on this container to crop the content.
-  // 3. Place the source image inside this container.
-  // 4. Scale and position the inner image to match the root image's dimensions and coordinate system.
-  //    - Width/Height: Inverse of container size (e.g., if container is 50% width, image is 200% width).
-  //    - Left/Top: Negative offset to compensate for container position.
-  // 5. Apply CSS transform (scale -1) to mirror the image.
+  const config = SYMMETRY_CONFIG[effectiveMode.value]
+  const { w: sw, h: sh } = config.source
 
-  const createGhost = (
-    cx: number,
-    cy: number,
-    cw: number,
-    ch: number, // Container percentages (0-100)
-    sx: number,
-    sy: number, // Scale factors
-  ): GhostLayer => {
+  return config.mirrors.map((mirror) => {
+    // Container position and size (Target Area)
+    // mirror.x/y is the top-left of the target area
+    // sw/sh is the size of the target area (same as source)
+    const cx = mirror.x * 100
+    const cy = mirror.y * 100
+    const cw = sw * 100
+    const ch = sh * 100
+
     return {
       container: {
         position: 'absolute',
@@ -179,60 +130,20 @@ const ghosts = computed<GhostLayer[]>(() => {
         position: 'absolute',
         width: `${100 * (100 / cw)}%`,
         height: `${100 * (100 / ch)}%`,
-        left: `${-(cx / cw) * 100}%`,
-        top: `${-(cy / ch) * 100}%`,
+        // Offset the image to align with the container.
+        // Since the container is positioned at `mirror.x` (relative to root),
+        // we need to shift the inner image back by the same amount to align the coordinate systems.
+        // The shift is relative to the container's width (`sw`), so the formula is:
+        // - (mirror.x / source.w) * 100%
+        left: `${-(mirror.x / sw) * 100}%`,
+        top: `${-(mirror.y / sh) * 100}%`,
         maxWidth: 'none',
         maxHeight: 'none',
-        transform: `scale(${sx}, ${sy})`,
+        transform: `scale(${mirror.scaleX}, ${mirror.scaleY})`,
         transformOrigin: 'center center',
       },
     }
-  }
-
-  switch (effectiveMode.value) {
-    case 'left-to-right': // Mirror Left to Right. Target: Right Half.
-      return [createGhost(50, 0, 50, 100, -1, 1)]
-
-    case 'right-to-left': // Mirror Right to Left. Target: Left Half.
-      return [createGhost(0, 0, 50, 100, -1, 1)]
-
-    case 'top-to-bottom': // Mirror Top to Bottom. Target: Bottom Half.
-      return [createGhost(0, 50, 100, 50, 1, -1)]
-
-    case 'bottom-to-top': // Mirror Bottom to Top. Target: Top Half.
-      return [createGhost(0, 0, 100, 50, 1, -1)]
-
-    case 'tl-to-all': // TL to TR, BL, BR
-      return [
-        createGhost(50, 0, 50, 50, -1, 1), // TR
-        createGhost(0, 50, 50, 50, 1, -1), // BL
-        createGhost(50, 50, 50, 50, -1, -1), // BR
-      ]
-
-    case 'tr-to-all': // TR to TL, BL, BR
-      return [
-        createGhost(0, 0, 50, 50, -1, 1), // TL
-        createGhost(0, 50, 50, 50, -1, -1), // BL
-        createGhost(50, 50, 50, 50, 1, -1), // BR
-      ]
-
-    case 'bl-to-all': // BL to TL, TR, BR
-      return [
-        createGhost(0, 0, 50, 50, 1, -1), // TL
-        createGhost(50, 0, 50, 50, -1, -1), // TR
-        createGhost(50, 50, 50, 50, -1, 1), // BR
-      ]
-
-    case 'br-to-all': // BR to TL, TR, BL
-      return [
-        createGhost(0, 0, 50, 50, -1, -1), // TL
-        createGhost(50, 0, 50, 50, 1, -1), // TR
-        createGhost(0, 50, 50, 50, -1, 1), // BL
-      ]
-
-    default:
-      throw new Error('Invalid symmetry mode for ghost preview')
-  }
+  })
 })
 </script>
 

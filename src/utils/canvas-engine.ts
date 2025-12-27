@@ -1,7 +1,7 @@
 import GIF from 'gif.js'
 import workerScriptUrl from 'gif.js/dist/gif.worker.js?url'
 import { GifReader } from 'omggif'
-import type { SymmetryMode } from '@/types'
+import { SYMMETRY_CONFIG, type SymmetryMode } from '@/utils/symmetry'
 
 export class CanvasEngine {
   private ctx: CanvasRenderingContext2D
@@ -220,73 +220,32 @@ export class CanvasEngine {
     // Clear the canvas to avoid transparency stacking issues
     ctx.clearRect(0, 0, w, h)
 
-    const drawSource = (sx: number, sy: number, sw: number, sh: number) => {
-      ctx.drawImage(sourceCanvas, sx, sy, sw, sh, sx, sy, sw, sh)
-    }
+    const config = SYMMETRY_CONFIG[mode]
+    const { x: sxNorm, y: syNorm, w: swNorm, h: shNorm } = config.source
 
-    const drawReflected = (
-      sx: number,
-      sy: number,
-      sw: number,
-      sh: number,
-      dx: number,
-      dy: number,
-      dw: number,
-      dh: number,
-      scaleX: number,
-      scaleY: number,
-    ) => {
+    // Calculate source rect in pixels
+    const sx = sxNorm * w
+    const sy = syNorm * h
+    const sw = swNorm * w
+    const sh = shNorm * h
+
+    // Draw Source
+    ctx.drawImage(sourceCanvas, sx, sy, sw, sh, sx, sy, sw, sh)
+
+    // Draw Mirrors
+    for (const mirror of config.mirrors) {
+      const dx = mirror.x * w
+      const dy = mirror.y * h
+      const dw = sw // Destination size is same as source size
+      const dh = sh
+
       ctx.save()
-      ctx.translate(dx + (scaleX < 0 ? dw : 0), dy + (scaleY < 0 ? dh : 0))
-      ctx.scale(scaleX, scaleY)
+      // Translate to the origin of the destination rect, adjusting for flip
+      // If scaleX is -1, we need to translate by width to flip around the right edge of the rect
+      ctx.translate(dx + (mirror.scaleX < 0 ? dw : 0), dy + (mirror.scaleY < 0 ? dh : 0))
+      ctx.scale(mirror.scaleX, mirror.scaleY)
       ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, dw, dh)
       ctx.restore()
-    }
-
-    const halfW = w / 2
-    const halfH = h / 2
-
-    switch (mode) {
-      case 'left-to-right':
-        drawSource(0, 0, halfW, h)
-        drawReflected(0, 0, halfW, h, halfW, 0, halfW, h, -1, 1)
-        break
-      case 'right-to-left':
-        drawSource(halfW, 0, halfW, h)
-        drawReflected(halfW, 0, halfW, h, 0, 0, halfW, h, -1, 1)
-        break
-      case 'top-to-bottom':
-        drawSource(0, 0, w, halfH)
-        drawReflected(0, 0, w, halfH, 0, halfH, w, halfH, 1, -1)
-        break
-      case 'bottom-to-top':
-        drawSource(0, halfH, w, halfH)
-        drawReflected(0, halfH, w, halfH, 0, 0, w, halfH, 1, -1)
-        break
-      case 'tl-to-all':
-        drawSource(0, 0, halfW, halfH)
-        drawReflected(0, 0, halfW, halfH, halfW, 0, halfW, halfH, -1, 1)
-        drawReflected(0, 0, halfW, halfH, 0, halfH, halfW, halfH, 1, -1)
-        drawReflected(0, 0, halfW, halfH, halfW, halfH, halfW, halfH, -1, -1)
-        break
-      case 'tr-to-all':
-        drawSource(halfW, 0, halfW, halfH)
-        drawReflected(halfW, 0, halfW, halfH, 0, 0, halfW, halfH, -1, 1)
-        drawReflected(halfW, 0, halfW, halfH, halfW, halfH, halfW, halfH, 1, -1)
-        drawReflected(halfW, 0, halfW, halfH, 0, halfH, halfW, halfH, -1, -1)
-        break
-      case 'bl-to-all':
-        drawSource(0, halfH, halfW, halfH)
-        drawReflected(0, halfH, halfW, halfH, halfW, halfH, halfW, halfH, -1, 1)
-        drawReflected(0, halfH, halfW, halfH, 0, 0, halfW, halfH, 1, -1)
-        drawReflected(0, halfH, halfW, halfH, halfW, 0, halfW, halfH, -1, -1)
-        break
-      case 'br-to-all':
-        drawSource(halfW, halfH, halfW, halfH)
-        drawReflected(halfW, halfH, halfW, halfH, 0, halfH, halfW, halfH, -1, 1)
-        drawReflected(halfW, halfH, halfW, halfH, halfW, 0, halfW, halfH, 1, -1)
-        drawReflected(halfW, halfH, halfW, halfH, 0, 0, halfW, halfH, -1, -1)
-        break
     }
   }
 }
