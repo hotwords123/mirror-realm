@@ -6,12 +6,19 @@ import { SYMMETRY_CONFIG, type SymmetryMode } from '@/utils/symmetry'
 export class CanvasEngine {
   private ctx: CanvasRenderingContext2D
   private canvas: HTMLCanvasElement
+  private sourceCtx: CanvasRenderingContext2D
+  private sourceCanvas: HTMLCanvasElement
 
   constructor() {
     this.canvas = document.createElement('canvas')
     const ctx = this.canvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) throw new Error('Could not get 2D context')
     this.ctx = ctx
+
+    this.sourceCanvas = document.createElement('canvas')
+    const sourceCtx = this.sourceCanvas.getContext('2d', { willReadFrequently: true })
+    if (!sourceCtx) throw new Error('Could not get 2D context for source canvas')
+    this.sourceCtx = sourceCtx
   }
 
   async process(
@@ -212,40 +219,54 @@ export class CanvasEngine {
     const w = canvas.width
     const h = canvas.height
 
-    const sourceCanvas = document.createElement('canvas')
-    sourceCanvas.width = w
-    sourceCanvas.height = h
-    sourceCanvas.getContext('2d')!.drawImage(canvas, 0, 0)
-
-    // Clear the canvas to avoid transparency stacking issues
-    ctx.clearRect(0, 0, w, h)
-
     const config = SYMMETRY_CONFIG[mode]
-    const { x: sxNorm, y: syNorm, w: swNorm, h: shNorm } = config.source
 
     // Calculate source rect in pixels
-    const sx = sxNorm * w
-    const sy = syNorm * h
-    const sw = swNorm * w
-    const sh = shNorm * h
+    const [sx, sy, sw, sh] = normalizeRect(
+      config.source.x * w,
+      config.source.y * h,
+      config.source.w * w,
+      config.source.h * h,
+    )
 
-    // Draw Source
-    ctx.drawImage(sourceCanvas, sx, sy, sw, sh, sx, sy, sw, sh)
+    this.sourceCanvas.width = sw
+    this.sourceCanvas.height = sh
+    this.sourceCtx.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh)
 
     // Draw Mirrors
     for (const mirror of config.mirrors) {
-      const dx = mirror.x * w
-      const dy = mirror.y * h
-      const dw = sw // Destination size is same as source size
-      const dh = sh
+      const [dx, dy, dw, dh] = normalizeRect(
+        mirror.x * w,
+        mirror.y * h,
+        sw * mirror.scaleX,
+        sh * mirror.scaleY,
+      )
 
       ctx.save()
-      // Translate to the origin of the destination rect, adjusting for flip
-      // If scaleX is -1, we need to translate by width to flip around the right edge of the rect
-      ctx.translate(dx + (mirror.scaleX < 0 ? dw : 0), dy + (mirror.scaleY < 0 ? dh : 0))
-      ctx.scale(mirror.scaleX, mirror.scaleY)
-      ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, dw, dh)
+
+      ctx.translate(dx, dy)
+      ctx.scale(Math.sign(mirror.scaleX), Math.sign(mirror.scaleY))
+
+      ctx.clearRect(0, 0, dw, dh)
+      ctx.drawImage(this.sourceCanvas, 0, 0, sw, sh, 0, 0, dw, dh)
       ctx.restore()
     }
   }
+}
+
+function normalizeRect(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): [number, number, number, number] {
+  if (w < 0) {
+    w = -w
+    x += w
+  }
+  if (h < 0) {
+    h = -h
+    y += h
+  }
+  return [Math.floor(x), Math.floor(y), Math.ceil(w), Math.ceil(h)]
 }
