@@ -69,6 +69,7 @@ export class CanvasEngine {
       width,
       height,
       workerScript: workerScriptUrl,
+      transparent: 0xff00ff, // Magenta as chroma key
     })
 
     const frameCanvas = document.createElement('canvas')
@@ -76,9 +77,43 @@ export class CanvasEngine {
     frameCanvas.height = height
     const frameCtx = frameCanvas.getContext('2d', { willReadFrequently: true })!
 
+    // Composition canvas for handling transparency
+    const compCanvas = document.createElement('canvas')
+    compCanvas.width = width
+    compCanvas.height = height
+    const compCtx = compCanvas.getContext('2d', { willReadFrequently: true })!
+
     const frameData = new Uint8ClampedArray(width * height * 4)
+    let backupFrameData: Uint8ClampedArray | null = null
 
     for (let i = 0; i < reader.numFrames(); i++) {
+      const info = reader.frameInfo(i)
+
+      // 1. Handle Disposal of Previous Frame
+      if (i > 0) {
+        const prevInfo = reader.frameInfo(i - 1)
+        if (prevInfo.disposal === 2) {
+          // Restore to background (Clear rect to transparent)
+          this.clearFrameDataRect(
+            frameData,
+            width,
+            prevInfo.x,
+            prevInfo.y,
+            prevInfo.width,
+            prevInfo.height,
+          )
+        } else if (prevInfo.disposal === 3 && backupFrameData) {
+          // Restore to previous
+          frameData.set(backupFrameData)
+        }
+      }
+
+      // 2. Save state if current frame needs to be restored later
+      if (info.disposal === 3) {
+        backupFrameData = new Uint8ClampedArray(frameData)
+      }
+
+      // 3. Decode current frame
       reader.decodeAndBlitFrameRGBA(i, frameData)
 
       const imageData = new ImageData(frameData, width, height)
@@ -86,8 +121,15 @@ export class CanvasEngine {
 
       this.applySymmetry(frameCanvas, mode)
 
-      const delay = reader.frameInfo(i).delay * 10
-      gif.addFrame(frameCanvas, { delay, copy: true })
+      // 4. Handle Transparency for Output
+      // Fill with Chroma Key
+      compCtx.fillStyle = '#FF00FF'
+      compCtx.fillRect(0, 0, width, height)
+      // Draw the symmetrical frame
+      compCtx.drawImage(frameCanvas, 0, 0)
+
+      const delay = info.delay * 10
+      gif.addFrame(compCtx, { delay, copy: true })
 
       onProgress?.((i / reader.numFrames()) * 0.5)
     }
@@ -103,6 +145,25 @@ export class CanvasEngine {
 
       gif.render()
     })
+  }
+
+  private clearFrameDataRect(
+    data: Uint8ClampedArray,
+    width: number,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ) {
+    for (let dy = 0; dy < h; dy++) {
+      for (let dx = 0; dx < w; dx++) {
+        const index = ((y + dy) * width + (x + dx)) * 4
+        data[index] = 0
+        data[index + 1] = 0
+        data[index + 2] = 0
+        data[index + 3] = 0
+      }
+    }
   }
 
   private applySymmetry(canvas: HTMLCanvasElement, mode: SymmetryMode) {
