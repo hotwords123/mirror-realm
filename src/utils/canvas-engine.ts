@@ -2,6 +2,7 @@ import GIF from 'gif.js'
 import workerScriptUrl from 'gif.js/dist/gif.worker.js?url'
 import { GifReader } from 'omggif'
 import { SYMMETRY_CONFIG, type SymmetryMode } from '@/utils/symmetry'
+import YieldController from './yield-controller'
 
 export class CanvasEngine {
   private ctx: CanvasRenderingContext2D
@@ -92,6 +93,8 @@ export class CanvasEngine {
     const frameData = new Uint8ClampedArray(width * height * 4)
     let backupFrameData: Uint8ClampedArray | null = null
 
+    const yieldController = new YieldController(50)
+
     for (let i = 0; i < reader.numFrames(); i++) {
       const info = reader.frameInfo(i)
 
@@ -141,6 +144,9 @@ export class CanvasEngine {
       gif.addFrame(frameCtx, { delay, copy: true })
 
       onProgress?.((i / reader.numFrames()) * 0.5)
+
+      // Yield to main thread to allow UI updates
+      await yieldController.yieldIfNeeded()
     }
 
     return new Promise((resolve) => {
