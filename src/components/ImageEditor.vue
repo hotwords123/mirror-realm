@@ -37,8 +37,8 @@ function handleMouseMove(e: MouseEvent) {
   let bestMode: SymmetryMode | null = null
 
   for (const [mode, config] of Object.entries(SYMMETRY_CONFIG)) {
-    const dx = config.center.x - nx
-    const dy = config.center.y - ny
+    const dx = (config.center.x - nx) / config.source.w
+    const dy = (config.center.y - ny) / config.source.h
     const dist = dx * dx + dy * dy // Squared distance
     if (dist < minDist) {
       minDist = dist
